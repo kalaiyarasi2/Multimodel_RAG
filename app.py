@@ -7,6 +7,7 @@ import warnings
 from typing import List, Dict, Any
 from PIL import Image
 from pathlib import Path
+import dotenv
 import concurrent.futures
 import psutil
 import GPUtil
@@ -54,7 +55,9 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.llms.groq import Groq
 from llama_index.core.retrievers import VectorIndexRetriever
-from llama_index.core.query_engine import RetrieverQueryEngine
+
+
+dotenv.load_dotenv()
 
 warnings.filterwarnings("ignore")
 
@@ -147,7 +150,12 @@ class MultimodalRAGSystem:
         self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").eval().to(self.device)
 
         # Groq Client for Vision (LLaVA) - using the passed API key
-        self.groq_client = GroqClient(api_key=groq_api_key)
+        try:
+            self.groq_client = GroqClient(api_key=groq_api_key)
+        except Exception as e:
+            print(f"⚠️  Warning: Could not initialize Groq client: {e}")
+            print("   Image captioning will use OCR fallback only.")
+            self.groq_client = None
 
         # Cross-Encoder for reranking
         self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-12-v2')
@@ -267,7 +275,7 @@ class MultimodalRAGSystem:
     def load_pre_extracted_text(self) -> List[Dict]:
         """Load text from pre-extracted files (from text_extraction.py)"""
         pages_text = []
-        text_dir = Path("maritime_akv_extracted/text")
+        text_dir = Path("maritime_akv_extracted_unstructured/text")
         if text_dir.exists():
             for txt_file in sorted(text_dir.glob("*.txt")):
                 page_num = int(txt_file.stem.split('_')[1]) + 1
@@ -476,6 +484,10 @@ class MultimodalRAGSystem:
     # ------------------------------
     def generate_image_caption(self, image_path: str) -> str:
         """Generate caption using Groq LLaVA model"""
+        if self.groq_client is None:
+            print("⚠️  Groq client not available, using OCR fallback")
+            return ""
+        
         try:
             # Encode image to base64
             with open(image_path, "rb") as image_file:
@@ -933,7 +945,7 @@ def interactive_query_loop(rag_system):
 # Main Execution
 # ==============================
 if __name__ == "__main__":
-    GROQ_API_KEY = os.getenv('GROQ_API_KEY', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')  # Use env var or fallback
+    GROQ_API_KEY = os.getenv('GROQ_API_KEY')  # Use env var or fallback
 
     print("\n🚀 Starting Optimized Multimodal RAG System")
     print("Features: GPU acceleration, parallel processing, 80% resource limits")
@@ -961,7 +973,6 @@ if __name__ == "__main__":
 
     # Enter interactive query loop
     interactive_query_loop(rag)
-
 
 
 

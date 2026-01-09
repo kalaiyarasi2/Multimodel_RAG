@@ -14,6 +14,7 @@ OR use EasyOCR (recommended - no external installation needed)
 """
 
 import os
+import torch
 import fitz  # PyMuPDF
 from PIL import Image
 import cv2
@@ -56,7 +57,7 @@ class PDFTextExtractor:
         if ocr_method == "auto":
             if EASYOCR_AVAILABLE:
                 self.ocr_method = "easyocr"
-                self.reader = easyocr.Reader(['en'], gpu=False)
+                self.reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
                 print("✓ Using EasyOCR for text extraction")
             elif TESSERACT_AVAILABLE:
                 self.ocr_method = "tesseract"
@@ -118,8 +119,14 @@ class PDFTextExtractor:
         """
         text = page.get_text()
         
-        # Check if page is likely scanned (very little or no text)
-        is_scanned = len(text.strip()) < 50
+        # Better heuristics for scanned detection
+        word_count = len(text.split())
+        line_count = len([l for l in text.split('\n') if l.strip()])
+        
+        # Page likely scanned if:
+        # - Less than 20 words, OR
+        # - Less than 3 lines of actual content
+        is_scanned = word_count < 20 or line_count < 3
         
         return text, is_scanned
     

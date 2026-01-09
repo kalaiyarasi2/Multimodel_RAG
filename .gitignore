@@ -1,3 +1,5 @@
 .env
 venv/
 maritime_rag/
+maritime_akv_extracted/
+practice/

@@ -38,7 +38,9 @@ from transformers import (
     AutoTokenizer,
     AutoModel,
     CLIPProcessor,
-    CLIPModel
+    CLIPModel,
+    BlipProcessor,
+    BlipForConditionalGeneration
 )
 from sentence_transformers import CrossEncoder
 import faiss
@@ -149,13 +151,11 @@ class MultimodalRAGSystem:
         self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").eval().to(self.device)
 
-        # Groq Client for Vision (LLaVA) - using the passed API key
-        try:
-            self.groq_client = GroqClient(api_key=groq_api_key)
-        except Exception as e:
-            print(f"⚠️  Warning: Could not initialize Groq client: {e}")
-            print("   Image captioning will use OCR fallback only.")
-            self.groq_client = None
+        # BLIP for Image Captioning - GPU prioritized
+        print("... loading BLIP model for captioning")
+        self.blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+        self.blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").eval().to(self.device)
+        print("✓ BLIP model loaded.")
 
         # Cross-Encoder for reranking
         self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-12-v2')
@@ -483,41 +483,18 @@ class MultimodalRAGSystem:
     # 3. Visual Processing (GPU-accelerated with batching)
     # ------------------------------
     def generate_image_caption(self, image_path: str) -> str:
-        """Generate caption using Groq LLaVA model"""
-        if self.groq_client is None:
-            print("⚠️  Groq client not available, using OCR fallback")
-            return ""
-        
+        """Generate caption using BLIP model"""
         try:
-            # Encode image to base64
-            with open(image_path, "rb") as image_file:
-                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-            
-            # Call Groq API
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Describe this image in detail. If there is text, transcribe it."},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{encoded_string}",
-                                },
-                            },
-                        ],
-                    }
-                ],
-                model="meta-llama/llama-4-maverick-17b-128e-instruct",
-            )
-            
-            caption = chat_completion.choices[0].message.content
+            image = Image.open(image_path).convert("RGB")
+            inputs = self.blip_processor(images=image, return_tensors="pt").to(self.device)
+            with torch.no_grad():
+                outputs = self.blip_model.generate(**inputs, max_new_tokens=50)
+            caption = self.blip_processor.decode(outputs[0], skip_special_tokens=True)
+            torch.cuda.empty_cache()  # Clear GPU memory
             return caption
-
         except Exception as e:
-            print(f"⚠️ Groq caption generation failed: {e}. Falling back to OCR.")
-            # Fallback to OCR if Groq fails
+            print(f"⚠️ BLIP caption generation failed: {e}. Falling back to OCR.")
+            # Fallback to OCR if BLIP fails
             return self.ocr_with_easyocr(image_path)
 
 
@@ -973,7 +950,6 @@ if __name__ == "__main__":
 
     # Enter interactive query loop
     interactive_query_loop(rag)
-
 
 
 

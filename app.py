@@ -933,7 +933,7 @@ def interactive_query_loop(rag_system):
 # Main Execution
 # ==============================
 if __name__ == "__main__":
-    GROQ_API_KEY = os.getenv('GROQ_API_KEY', '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')  # Use env var or fallback
+    GROQ_API_KEY = os.getenv('GROQ_API_KEY', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')  # Use env var or fallback
 
     print("\n🚀 Starting Optimized Multimodal RAG System")
     print("Features: GPU acceleration, parallel processing, 80% resource limits")
@@ -961,6 +961,7 @@ if __name__ == "__main__":
 
     # Enter interactive query loop
     interactive_query_loop(rag)
+
 
 
 

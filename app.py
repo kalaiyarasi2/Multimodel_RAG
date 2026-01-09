@@ -509,7 +509,7 @@ class MultimodalRAGSystem:
                         ],
                     }
                 ],
-                model="llava-v1.5-7b-32k-preview",
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
             )
             
             caption = chat_completion.choices[0].message.content
@@ -973,6 +973,7 @@ if __name__ == "__main__":
 
     # Enter interactive query loop
     interactive_query_loop(rag)
+
 
 
 
